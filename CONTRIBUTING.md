@@ -1,16 +1,18 @@
 # How to contribute and make changes to your user image
 
 ## Setting up your fork and clones
-First, go to your [github profile settings](https://github.com/settings/keys)
+First, go to your [GitHub profile settings](https://github.com/settings/keys)
 and make sure you have an SSH key uploaded.
 
-Next, go to the github repo of the image that you'd like to work on and create
+Next, go to the GitHub repo of the image that you'd like to work on and create
 a fork.  To do this, click on the `fork` button and then `Create fork`.
 
 ![Forking](images/create-fork.png)
 
 
-After you create your fork of the new image repository, you should disable Github Actions **only for your fork**.  To do this, navigate to `Settings` --> `Actions` --> `General` and select `Disable actions`.  Then click `Save`:
+After you create your fork of the new image repository, you should disable
+GitHub Actions **only for your fork**.  To do this, navigate to `Settings` -->
+`Actions` --> `General` and select `Disable actions`.  Then click `Save`:
 
 ![Disable fork actions](images/disable-fork-actions.png)
 
@@ -33,12 +35,14 @@ image repo (`upstream`) and your fork (`origin`).  After the initial clone,
 `origin` will be pointing to the main repo and we'll need to change that.
 
 ```
+cd <image-name>
+git remote rename origin upstream # rename origin to upstream
+git remote add origin git@github.com:<your github username>/<image-name>.git # add your fork as origin
+```
+
+To confirm these changes, run `git remote -v` and see if everything is correct:
+```
 $ cd <image-name>
-$ git remote -v # confirm that origin points to the primary repo
-origin	git@github.com:berkeley-dsep-infra/<image-name>.git (fetch)
-origin	git@github.com:berkeley-dsep-infra/<image-name>.git (push)
-$ git remote rename origin upstream # rename origin to upstream
-$ git remote add origin git@github.com:<your github username>/<image-name>.git # add your fork as origin
 $ git remote -v # confirm the settings
 origin	git@github.com:<your github username>/<image-name>.git (fetch)
 origin	git@github.com:<your github username>/<image-name>.git (push)
@@ -56,7 +60,37 @@ git rebase upstream/main && \
 git push origin main
 ```
 
-## Procedure
+## Procedure for making changes to the image
+
+### High-level overview of the full process
+
+```mermaid
+%% State diagram documentation at
+%% https://mermaid.js.org/syntax/stateDiagram.html
+
+stateDiagram-v2
+    image_repo: github.com/berkeley-dsep-infra/hubname-user-image
+    user_repo: github.com/username/hubname-user-image
+    image_test_build: Image is built and tested
+    image_push_build: Image is built and pushed to registry
+    pr_created: A pull request is automatically<br/>created in the Datahub repo
+    deploy_to_staging: Hub is deployed to staging
+    contributor_tests: The contributor logs into the<br/>staging hub and tests the image.
+    deploy_to_prod: Hub is deployed to prod
+
+    image_repo --> user_repo: Contributor forks the image repo.
+    user_repo --> image_repo: Contributor creates a PR.
+    image_repo --> image_test_build
+    image_test_build --> image_push_build: Test build passes and Datahub staff merge pull request
+    image_push_build --> pr_created
+    pr_created --> deploy_to_staging: Datahub staff review and merge to staging
+    deploy_to_staging --> contributor_tests
+    contributor_tests --> deploy_to_prod: Datahub staff create a PR to merge to prod
+```
+
+These steps will be explained in detail below.
+
+### Syncing your repository before you make any changes
 
 When developing for this deployment, always work in a fork of this repo.
 You should also make sure that your repo is up-to-date with this one prior
@@ -81,14 +115,20 @@ what's been modified and check out the diffs:  `git status` and `git diff`.
 
 ### Building the image locally
 
-You should use [repo2docker](https://repo2docker.readthedocs.io/en/latest/) to build and use/test the image on your own device before you push and create a PR.  It's better (and typically faster) to do this first before using CI/CD.  There's no need to waste Github Action minutes to test build images when you can do this on your own device!
+You need to use [repo2docker](https://repo2docker.readthedocs.io/en/latest/) to
+build and use/test the image on your own device before you push and create a
+pull request. It's better (and typically faster) to do this first before using
+CI/CD.  There's no need to waste GitHub Action minutes to test build images
+when you can do this on your own device!
 
-Run `repo2docker` from inside the cloned image repo.  To run on a linux/WSL2 linux shell:
+Run `repo2docker` from inside the cloned image repo.  To run on a linux/WSL2
+or regular linux shell:
 ```
 repo2docker . # <--- the path to the repo
 ```
 
-If you are using an ARM CPU (Apple M* silicon), you will need to run `jupyter-repo2docker` with the following arguments:
+If you are using an ARM CPU (Apple M* silicon), you will need to run
+`jupyter-repo2docker` with the following arguments:
 
 ```
 jupyter-repo2docker --user-id=1000 --user-name=jovyan \
@@ -98,13 +138,16 @@ jupyter-repo2docker --user-id=1000 --user-name=jovyan \
   . # <--- the path to the repo
 ```
 
-If you just want to see if the image builds, but not automatically launch the server, add `--no-run` to the arguments (before the final `.`).
+If you just want to see if the image builds, but not automatically launch the
+server, add `--no-run` to the arguments (before the final `.`).
+
+### Pushing the modified files to your fork
 
 When you're ready to push these changes, first you'll need to stage them for a
 commit:
 
 ```
-git add <file1> <file2> <etc>
+git add <file1> <file2> ...
 ```
 
 Commit these changes locally:
@@ -119,6 +162,8 @@ Now push to your fork:
 git push origin <branch name>
 ```
 
+### Creating a pull request
+
 Once you've pushed to your fork, you can go to the image repo and there should
 be a big green button on the top that says `Compare and pull request`.
 Click on that, check out the commits and file diffs, edit the title and
@@ -128,23 +173,35 @@ description if needed and then click `Create pull request`.
 
 ![Create PR](images/create-pr.png)
 
-If you're having issues, you can refer to the [github documentation for pull
+If you're having issues, you can refer to the [GitHub documentation for pull
 requests](https://help.github.com/articles/about-pull-requests/).
 Keep the choice for `base` in the GitHub PR user interface, while the choice
 for `head` is your fork.
 
-Once this is complete and if there are no problems, a github action will
+Once this is complete and if there are no problems, a GitHub action will
 automatically [build and test](https://github.com/berkeley-dsep-infra/hub-user-image-template/blob/main/.github/workflows/build-test-image.yaml)
 the image.  If this fails, please check the output of the workflow in the
 action, and make any changes required to get the build to pass.
 
+### Code reviews and merging the pull request
+
 Once the image build has completed successfully, you can request that
 someone review the PR before merging, or you can merge yourself if you are
-confident. This merge will trigger a [second giuthub workflow](https://github.com/berkeley-dsep-infra/hub-user-image-template/blob/main/.github/workflows/build-push-image-commit.yaml)
+confident. This merge will trigger a [second giuthub workflow](https://github.com/berkeley-dsep-infra/hub-user-image-template/blob/main/.github/workflows/build-push-create-pr.yaml)
 that builds the image again, pushes it to the appropriate location in our
-Google Artifact Registry and finally creates and pushes a commit to the
-[Datahub](https://github.com/berkeley-dsep-infra/datahub) repo updating the
-image hash of the deployment to point at the newly built image.
+Google Artifact Registry and finally creates a pull request in the
+[Datahub](https://github.com/berkeley-dsep-infra/datahub). This pull request
+updates the hash used to identify the freshly built image.
 
-You will now need to create a pull request in the Datahub repo to merge these changes
-and deploy them to `staging` for testing.
+### Pull request review in the Datahub repository
+
+Let the Datahub staff know that the pull request was created, and they will
+review and merge it into the `staging` branch. You can notify them via a
+corresponding GitHub Issue, or on the UCTech #datahubs slack channel.
+
+Once it's been merged to `staging`, it will automatically deploy the new image
+to the hub's staging environment in a few minutes and you'll be able to test it
+out!
+
+When you're happy with the results, let Datahub staff know, and they will
+create another pull request to deploy the new image to `prod`.
