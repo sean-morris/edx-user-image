@@ -1,4 +1,4 @@
-name: Build and push container image, and push update to datahub repo if needed
+name: Build and push container image, and update edx-hub repo if needed
 on:
   workflow_dispatch:
   push:
