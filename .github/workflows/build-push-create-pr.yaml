@@ -84,7 +84,7 @@ jobs:
         with:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
-          repository: 'berkeley-dsep-infra/datahub'
+          repository: 'edx-berkeley/edx-hub'
           sparse-checkout: |
             deployments/
   
