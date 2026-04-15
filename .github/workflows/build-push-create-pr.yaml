@@ -92,9 +92,8 @@ jobs:
         if: ${{ env.IMAGE_TAG }}
         run: |
           for deployment in $(grep -lr ${IMAGE} deployments/); do
-            old_hash=$(grep ${IMAGE} ${deployment} | awk -F":" '{print $3}')
             new_hash=${IMAGE_TAG}
-            sed -i -e "s,${IMAGE}:${old_hash},${IMAGE}:${new_hash},g" ${deployment}
+            sed -i -e "/name: ${IMAGE}/{n; s/tag: .*/tag: ${new_hash}/}" ${deployment}
             echo "Updated ${deployment} with new image tag ${new_hash}"
           done
 
