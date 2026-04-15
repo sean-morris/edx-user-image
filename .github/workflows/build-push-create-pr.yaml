@@ -92,9 +92,9 @@ jobs:
         if: ${{ env.IMAGE_TAG }}
         run: |
           for deployment in $(grep -lr ${IMAGE} deployments/); do
-            new_hash=${IMAGE_TAG}
-            sed -i -e "/name: ${IMAGE}/{n; s/tag: .*/tag: ${new_hash}/}" ${deployment}
-            echo "Updated ${deployment} with new image tag ${new_hash}"
+            old_hash=$(grep "tag:" ${deployment} | awk '{print $2}')
+            sed -i "s/tag: ${old_hash}/tag: ${IMAGE_TAG}/" ${deployment}
+            echo "Updated ${deployment} from ${old_hash} to ${IMAGE_TAG}"
           done
 
       - name: Create feature branch, add, commit, push changes and open a pull request
