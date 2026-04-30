@@ -1,0 +1,59 @@
+name: Grader Check
+
+on:
+  pull_request:
+    paths-ignore:
+      - 'README.md'
+      - 'CONTRIBUTING.md'
+      - 'LICENSE'
+      - '.github/**'
+      - 'images/**'
+
+jobs:
+  grader-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h
+
+      - name: Build PR image
+        uses: jupyterhub/repo2docker-action@master
+        with:
+          FORCE_REPO2DOCKER_VERSION: jupyter-repo2docker==2024.07.0
+          IMAGE_NAME: edx-user-image
+          LATEST_TAG_OFF: false
+          REPO_DIR: /srv/repo
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install test script dependencies
+        run: pip install requests pyjwt nbformat pytz
+
+      - name: Fetch notebooks
+        env:
+          GITHUB_APP_ID: ${{ secrets.OTTER_GH_APP_ID }}
+          GITHUB_APP_PRIVATE_KEY: ${{ secrets.OTTER_GH_APP_PRIVATE_KEY }}
+          GITHUB_APP_INSTALLATION_ID: ${{ secrets.OTTER_GH_APP_INSTALLATION_ID }}
+        run: |
+          python tests/fetch_test_notebooks.py --courses "88ex,88bx,88cx,8x"
+
+      - name: Run grader.check tests
+        run: |
+          python tests/run_grader_check_tests.py --image edx-user-image:latest
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {"text": "${{ job.status == 'success' && '✅' || '❌' }} edx-user-image grader-check ${{ job.status }} — ${{ github.head_ref }} · <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Run #${{ github.run_id }}>"}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
