@@ -46,6 +46,14 @@ jobs:
       - name: Show how much disk space is left
         run: df -h
 
+      - name: Tag image with version
+        if: github.ref_type == 'tag'
+        run: |
+          SRC="us-central1-docker.pkg.dev/${IMAGE}:${{ steps.build-and-push.outputs.IMAGE_SHA_TAG }}"
+          DST="us-central1-docker.pkg.dev/${IMAGE}:${{ github.ref_name }}"
+          docker tag "$SRC" "$DST"
+          docker push "$DST"
+
       - name: Notify Slack
         if: always()
         uses: slackapi/slack-github-action@v1
