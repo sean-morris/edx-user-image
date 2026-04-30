@@ -26,6 +26,7 @@ jobs:
         with:
           FORCE_REPO2DOCKER_VERSION: jupyter-repo2docker==2024.07.0
           IMAGE_NAME: edx-user-image
+          NO_PUSH: true
           LATEST_TAG_OFF: false
           REPO_DIR: /srv/repo
 

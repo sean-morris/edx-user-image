@@ -2,14 +2,8 @@ name: Build and push container image, and update edx-hub repo if needed
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
-    paths-ignore:
-      - 'README.md'
-      - 'CONTRIBUTING.md'
-      - 'LICENSE'
-      - '.github/**'
-      - 'images/**'
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
 
 jobs:
   build-and-push:
@@ -51,6 +45,15 @@ jobs:
 
       - name: Show how much disk space is left
         run: df -h
+
+      - name: Notify Slack
+        if: always()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {"text": "${{ job.status == 'success' && '✅' || '❌' }} edx-user-image release ${{ job.status }} — tag `${{ github.ref_name }}` → image `${{ steps.build-and-push.outputs.IMAGE_SHA_TAG }}` · <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|Run #${{ github.run_id }}>"}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   update-deployment-image-tag:
     runs-on: ubuntu-latest
