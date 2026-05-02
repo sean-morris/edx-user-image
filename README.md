@@ -22,3 +22,60 @@ jupyter-repo2docker --user-id=1000 --user-name=jovyan \
 ```
 
 If you just want to see if the image builds, but not automatically launch the server, add `--no-run` to the arguments (before the final `.`).
+
+## Continuous Integration (CI)
+
+### Workflows
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `yaml-lint.yaml` | `pull_request` | Lints all YAML files via the shared workflow in `berkeley-dsep-infra/update-deployment` |
+| `build-test-image.yaml` | `pull_request` | Builds and tests the image via the shared workflow in `berkeley-dsep-infra/update-deployment` |
+| `grader-check.yml` | `pull_request_target` | Builds the PR image locally, fetches notebooks from the autograder repos, and runs `grader.check` tests |
+| `build-push-create-pr.yaml` | Push of a version tag (`X.Y.Z`) or manual `workflow_dispatch` | Builds and pushes the image to Google Artifact Registry, tags it with the version number, and opens a PR in [edx-hub](https://github.com/edx-berkeley/edx-hub) to update the deployment image tag |
+
+The `build-test-image.yaml` and `yaml-lint.yaml` workflows ignore changes to `README.md`, `CONTRIBUTING.md`, `LICENSE`, `.github/**`, and `images/**`. The `grader-check.yml` workflow ignores the same paths.
+
+### Releases
+
+Push a version tag in the format `X.Y.Z` to trigger a production release build:
+
+```bash
+git tag X.Y.Z
+git push upstream X.Y.Z. <-- assuming your origin is your fork
+```
+
+CI will build the image, push it to Google Artifact Registry, and automatically open a PR in `edx-hub` to update the deployed image tag.
+
+### Slack notifications
+
+CI results are posted to the **#edx-hub-ci** channel in the **UCB DS External** Slack workspace. To request access, contact a team member or reach out to sean.smorris@berkeley.edu.
+
+The following workflows post to Slack on every run (success or failure):
+- `grader-check.yml` — on every PR
+- `build-push-create-pr.yaml` — on every release tag build
+
+### Repository variables and secrets
+
+The following must be configured on the repository (or the `edx-berkeley` organization) for CI to function:
+
+**Variables (`vars.*`):**
+
+| Name | Description |
+|---|---|
+| `IMAGE` | Full image path in Google Artifact Registry (e.g., `data8x-scratch/user-images/edx-user-image`) |
+| `HUB` | Deployment name used to find and update the image tag in edx-hub |
+| `EDX_IMAGE_BUILDER_APP_ID` | GitHub App ID used to open PRs in edx-hub |
+| `IMAGE_BUILDER_BOT_EMAIL` | Git author email for automated commits to edx-hub |
+| `IMAGE_BUILDER_BOT_NAME` | Git author name for automated commits to edx-hub |
+| `OTTER_AUTOGRADERS_APP_ID` | GitHub App ID for reading autograder repos |
+| `OTTER_AUTOGRADERS_INSTALLATION_ID` | Installation ID for the autograder GitHub App |
+
+**Secrets (`secrets.*`):**
+
+| Name | Description |
+|---|---|
+| `GAR_SECRET_KEY_EDX` | GCP service account JSON key with push access to Google Artifact Registry |
+| `PRIVATE_KEY_SECRET` | Private key for the GitHub App that opens PRs in edx-hub |
+| `OTTER_GH_APP_PRIVATE_KEY` | Private key for the GitHub App that reads autograder repos (shared with otter-service and xDevs) |
+| `SLACK_WEBHOOK_URL` | Incoming webhook URL for the `#edx-hub-ci` Slack channel |
