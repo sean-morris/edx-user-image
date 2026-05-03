@@ -68,14 +68,14 @@ The following must be configured on the repository (or the `edx-berkeley` organi
 | `EDX_IMAGE_BUILDER_APP_ID` | GitHub App ID used to open PRs in edx-hub |
 | `IMAGE_BUILDER_BOT_EMAIL` | Git author email for automated commits to edx-hub |
 | `IMAGE_BUILDER_BOT_NAME` | Git author name for automated commits to edx-hub |
-| `OTTER_AUTOGRADERS_APP_ID` | GitHub App ID for reading autograder repos |
-| `OTTER_AUTOGRADERS_INSTALLATION_ID` | Installation ID for the autograder GitHub App |
+| `COURSE_CONTENT_READER_APP_ID` | GitHub App ID for reading autograder/student/solution repos |
+| `COURSE_CONTENT_READER_INSTALLATION_ID` | Installation ID for the course-content-reader GitHub App |
 
 **Secrets (`secrets.*`):**
 
 | Name | Description |
 |---|---|
 | `GAR_SECRET_KEY_EDX` | GCP service account JSON key with push access to Google Artifact Registry |
-| `PRIVATE_KEY_SECRET` | Private key for the GitHub App that opens PRs in edx-hub |
-| `OTTER_GH_APP_PRIVATE_KEY` | Private key for the GitHub App that reads autograder repos (shared with otter-service and xDevs) |
+| `EDX_IMAGE_BUILDER_PRIVATE_KEY` | Private key for the GitHub App that opens PRs in edx-hub |
+| `COURSE_CONTENT_READER_PRIVATE_KEY` | Private key for the GitHub App that reads autograder/student/solution repos (shared with otter-service and xDevs) |
 | `SLACK_WEBHOOK_URL` | Incoming webhook URL for the `#edx-hub-ci` Slack channel |
