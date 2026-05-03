@@ -76,6 +76,6 @@ The following must be configured on the repository (or the `edx-berkeley` organi
 | Name | Description |
 |---|---|
 | `GAR_SECRET_KEY_EDX` | GCP service account JSON key with push access to Google Artifact Registry |
-| `PRIVATE_KEY_SECRET` | Private key for the GitHub App that opens PRs in edx-hub |
-| `OTTER_GH_APP_PRIVATE_KEY` | Private key for the GitHub App that reads autograder repos (shared with otter-service and xDevs) |
+| `EDX_IMAGE_BUILDER_PRIVATE_KEY` | Private key for the GitHub App that opens PRs in edx-hub |
+| `OTTER_AUTOGRADERS_PRIVATE_KEY` | Private key for the GitHub App that reads autograder repos (shared with otter-service and xDevs) |
 | `SLACK_WEBHOOK_URL` | Incoming webhook URL for the `#edx-hub-ci` Slack channel |
