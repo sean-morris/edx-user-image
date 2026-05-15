@@ -36,13 +36,20 @@ def run_notebook_in_docker(image, nb_path, work_dir, raise_on_error=True):
         "--to", "notebook",
         "--execute",
         "--ExecutePreprocessor.timeout=300",
-        f"--ExecutePreprocessor.raise_on_ioerror={'True' if raise_on_error else 'False'}",
         "--output", nb_path.name,
         nb_path.name,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if raise_on_error and result.returncode != 0:
-        raise RuntimeError(result.stderr[-2000:] or result.stdout[-2000:])
+        # nbconvert writes CellExecutionError tracebacks to stderr, but harmless
+        # python warnings (e.g. subprocess line-buffering RuntimeWarning) also
+        # land there. Concatenate stdout too so the real error isn't masked.
+        combined = (
+            f"exit={result.returncode}\n"
+            f"--- stdout ---\n{result.stdout[-2000:]}\n"
+            f"--- stderr ---\n{result.stderr[-2000:]}"
+        )
+        raise RuntimeError(combined)
     output_nb = work_dir / nb_path.name
     if not output_nb.exists():
         raise RuntimeError(f"Output notebook not found after execution: {output_nb}")
@@ -99,11 +106,11 @@ def run_pair(image, course, assignment):
                 nb = run_notebook_in_docker(image, nb_in_work, role_work, raise_on_error=expect_pass)
             except RuntimeError as e:
                 if expect_pass:
-                    errors.append(f"{course}/{assignment} {role}: execution error — {str(e)[:300]}")
-                    print(f"    [FAIL] execution error")
+                    errors.append(f"{course}/{assignment} {role}: execution error\n{e}")
+                    print(f"    [FAIL] execution error\n{e}")
                 else:
                     # Student notebook raising exceptions is not unexpected (bad answers can error)
-                    print(f"    [warn] student notebook raised exception (may be OK): {str(e)[:200]}")
+                    print(f"    [warn] student notebook raised exception (may be OK)")
                 continue
 
             passes, failures = scan_check_outputs(nb)
