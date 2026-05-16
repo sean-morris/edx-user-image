@@ -61,9 +61,23 @@ jobs:
         run: |
           python tests/fetch_test_notebooks.py --courses "88ex,88bx,88cx,8x"
 
+      # repo2docker-action tags the locally-built image with the commit SHA
+      # (e.g. edx-user-image:6f6660ff162e), not :latest. With NO_PUSH:true the
+      # :latest tag is never created, so we discover whatever tag landed in the
+      # local Docker daemon and pass it through to the test script.
       - name: Run grader.check tests
         run: |
-          python tests/run_grader_check_tests.py --image edx-user-image:latest
+          BUILT=$(docker images --format "{{.Repository}}:{{.Tag}}" \
+            | grep "^edx-user-image:" \
+            | grep -v ":latest" \
+            | head -1)
+          if [ -z "$BUILT" ]; then
+            echo "No edx-user-image found in local Docker daemon"
+            docker images
+            exit 1
+          fi
+          echo "Testing against image: $BUILT"
+          python tests/run_grader_check_tests.py --image "$BUILT"
 
       - name: Notify Slack
         if: always()
