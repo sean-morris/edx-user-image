@@ -29,6 +29,11 @@ def run_notebook_in_docker(image, nb_path, work_dir, raise_on_error=True):
     """
     cmd = [
         "docker", "run", "--rm",
+        # Run as root so otter-grader can write .OTTER_LOG into /work — the
+        # mounted host dir is owned by the GH runner UID (1001), but the
+        # image's default user is jovyan (UID 1000), which can't write there.
+        # xDevs/tests/run_otter_grade_tests.py uses the same pattern.
+        "-u", "root",
         "-v", f"{work_dir.resolve()}:/work",
         "-w", "/work",
         image,
