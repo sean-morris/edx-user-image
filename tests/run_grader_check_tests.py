@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,11 +30,12 @@ def run_notebook_in_docker(image, nb_path, work_dir, raise_on_error=True):
     """
     cmd = [
         "docker", "run", "--rm",
-        # Run as root so otter-grader can write .OTTER_LOG into /work — the
-        # mounted host dir is owned by the GH runner UID (1001), but the
-        # image's default user is jovyan (UID 1000), which can't write there.
-        # xDevs/tests/run_otter_grade_tests.py uses the same pattern.
-        "-u", "root",
+        # Match the host UID/GID so the container can write into /work AND
+        # the host can clean up after — using -u root left .pyc files owned
+        # by root that tempfile.TemporaryDirectory cleanup couldn't unlink.
+        # HOME=/tmp avoids jupyter complaining about an unwritable home.
+        "-u", f"{os.getuid()}:{os.getgid()}",
+        "-e", "HOME=/tmp",
         "-v", f"{work_dir.resolve()}:/work",
         "-w", "/work",
         image,
