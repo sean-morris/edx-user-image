@@ -91,6 +91,18 @@ def gh_get(token, url):
     return resp.json()
 
 
+def fetch_blob_raw(token, git_url):
+    """Fetch a blob's raw bytes via the Git Blobs API (works up to 100 MB)."""
+    resp = requests.get(
+        git_url,
+        headers={"Authorization": f"token {token}", "Accept": "application/vnd.github.raw"},
+    )
+    if resp.status_code == 404:
+        return None
+    resp.raise_for_status()
+    return resp.content
+
+
 def fetch_dir_files(token, repo, dir_path, ref="main"):
     """Return list of (filename, decoded_bytes) for all files in a repo directory."""
     items = gh_get(token, f"https://api.github.com/repos/{repo}/contents/{dir_path}?ref={ref}")
@@ -99,6 +111,14 @@ def fetch_dir_files(token, repo, dir_path, ref="main"):
     results = []
     for item in items:
         if item["type"] != "file":
+            continue
+        # Contents API only returns inline base64 content for files ≤ 1 MB.
+        # Above that the `content` field is empty, so fall back to the Blobs API.
+        if item["size"] > 1_000_000:
+            raw = fetch_blob_raw(token, item["git_url"])
+            if raw is None:
+                continue
+            results.append((item["name"], raw))
             continue
         content_data = gh_get(token, item["url"])
         if content_data is None:
@@ -197,8 +217,8 @@ def fetch_for_course(token, course, smoke=False):
                 name = f"{assignment}.ipynb"
             renamed_solution.append((name, content))
 
-        save_files(student_files, OUTPUT_DIR / course / assignment / "student")
-        save_files(renamed_solution, OUTPUT_DIR / course / assignment / "solution")
+        save_files(student_files, OUTPUT_DIR / course / section / assignment / "student")
+        save_files(renamed_solution, OUTPUT_DIR / course / section / assignment / "solution")
         count += 1
 
     return count
@@ -241,8 +261,8 @@ def fetch_from_pr(changed_raw_paths):
             print(f"  [miss] {solution_dir}", file=sys.stderr)
             continue
 
-        out_student = OUTPUT_DIR / course / assignment / "student"
-        out_solution = OUTPUT_DIR / course / assignment / "solution"
+        out_student = OUTPUT_DIR / course / section / assignment / "student"
+        out_solution = OUTPUT_DIR / course / section / assignment / "solution"
 
         if out_student.exists():
             shutil.rmtree(out_student)
@@ -259,7 +279,7 @@ def fetch_from_pr(changed_raw_paths):
                 dest_name = f"{assignment}.ipynb"
             shutil.copy2(src, out_solution / dest_name)
 
-        print(f"  copied {course}/{assignment} from local workspace")
+        print(f"  copied {course}/{section}/{assignment} from local workspace")
         count += 1
 
     return count
