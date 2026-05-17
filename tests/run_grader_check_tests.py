@@ -12,6 +12,7 @@ Usage:
 """
 import argparse
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -29,6 +30,12 @@ def run_notebook_in_docker(image, nb_path, work_dir, raise_on_error=True):
     """
     cmd = [
         "docker", "run", "--rm",
+        # Match the host UID/GID so the container can write into /work AND
+        # the host can clean up after — using -u root left .pyc files owned
+        # by root that tempfile.TemporaryDirectory cleanup couldn't unlink.
+        # HOME=/tmp avoids jupyter complaining about an unwritable home.
+        "-u", f"{os.getuid()}:{os.getgid()}",
+        "-e", "HOME=/tmp",
         "-v", f"{work_dir.resolve()}:/work",
         "-w", "/work",
         image,
@@ -36,13 +43,20 @@ def run_notebook_in_docker(image, nb_path, work_dir, raise_on_error=True):
         "--to", "notebook",
         "--execute",
         "--ExecutePreprocessor.timeout=300",
-        f"--ExecutePreprocessor.raise_on_ioerror={'True' if raise_on_error else 'False'}",
         "--output", nb_path.name,
         nb_path.name,
     ]
     result = subprocess.run(cmd, capture_output=True, text=True)
     if raise_on_error and result.returncode != 0:
-        raise RuntimeError(result.stderr[-2000:] or result.stdout[-2000:])
+        # nbconvert writes CellExecutionError tracebacks to stderr, but harmless
+        # python warnings (e.g. subprocess line-buffering RuntimeWarning) also
+        # land there. Concatenate stdout too so the real error isn't masked.
+        combined = (
+            f"exit={result.returncode}\n"
+            f"--- stdout ---\n{result.stdout[-2000:]}\n"
+            f"--- stderr ---\n{result.stderr[-2000:]}"
+        )
+        raise RuntimeError(combined)
     output_nb = work_dir / nb_path.name
     if not output_nb.exists():
         raise RuntimeError(f"Output notebook not found after execution: {output_nb}")
@@ -72,13 +86,13 @@ def scan_check_outputs(nb):
     return passes, failures
 
 
-def run_pair(image, course, assignment):
-    student_src = TEST_FILES_DIR / course / assignment / "student"
-    solution_src = TEST_FILES_DIR / course / assignment / "solution"
+def run_pair(image, course, section, assignment):
+    student_src = TEST_FILES_DIR / course / section / assignment / "student"
+    solution_src = TEST_FILES_DIR / course / section / assignment / "solution"
     nb_name = f"{assignment}.ipynb"
 
     if not (student_src / nb_name).exists() or not (solution_src / nb_name).exists():
-        print(f"  [skip] {course}/{assignment}: notebook pair not present")
+        print(f"  [skip] {course}/{section}/{assignment}: notebook pair not present")
         return True, []
 
     errors = []
@@ -94,32 +108,32 @@ def run_pair(image, course, assignment):
             shutil.copytree(src_dir, role_work)
             nb_in_work = role_work / nb_name
 
-            print(f"  Executing {role} notebook ({course}/{assignment})...")
+            print(f"  Executing {role} notebook ({course}/{section}/{assignment})...")
             try:
                 nb = run_notebook_in_docker(image, nb_in_work, role_work, raise_on_error=expect_pass)
             except RuntimeError as e:
                 if expect_pass:
-                    errors.append(f"{course}/{assignment} {role}: execution error — {str(e)[:300]}")
-                    print(f"    [FAIL] execution error")
+                    errors.append(f"{course}/{section}/{assignment} {role}: execution error\n{e}")
+                    print(f"    [FAIL] execution error\n{e}")
                 else:
                     # Student notebook raising exceptions is not unexpected (bad answers can error)
-                    print(f"    [warn] student notebook raised exception (may be OK): {str(e)[:200]}")
+                    print(f"    [warn] student notebook raised exception (may be OK)")
                 continue
 
             passes, failures = scan_check_outputs(nb)
             if expect_pass:
                 if failures > 0:
-                    errors.append(f"{course}/{assignment} {role}: {failures} check(s) failed")
+                    errors.append(f"{course}/{section}/{assignment} {role}: {failures} check(s) failed")
                     print(f"    [FAIL] {failures} grader.check(s) failed, {passes} passed")
                 elif passes == 0:
-                    errors.append(f"{course}/{assignment} {role}: no grader.check output found")
+                    errors.append(f"{course}/{section}/{assignment} {role}: no grader.check output found")
                     print(f"    [FAIL] no grader.check output found")
                 else:
                     print(f"    [PASS] all {passes} grader.check(s) passed")
             else:
                 if failures == 0:
                     errors.append(
-                        f"{course}/{assignment} {role}: all {passes} check(s) passed — solutions may not be stripped"
+                        f"{course}/{section}/{assignment} {role}: all {passes} check(s) passed — solutions may not be stripped"
                     )
                     print(f"    [FAIL] all {passes} check(s) passed (expected failures)")
                 else:
@@ -138,17 +152,20 @@ def main():
         for course_dir in sorted(TEST_FILES_DIR.iterdir()):
             if not course_dir.is_dir():
                 continue
-            for assignment_dir in sorted(course_dir.iterdir()):
-                if assignment_dir.is_dir():
-                    pairs.append((course_dir.name, assignment_dir.name))
+            for section_dir in sorted(course_dir.iterdir()):
+                if not section_dir.is_dir():
+                    continue
+                for assignment_dir in sorted(section_dir.iterdir()):
+                    if assignment_dir.is_dir():
+                        pairs.append((course_dir.name, section_dir.name, assignment_dir.name))
 
     if not pairs:
         print("No notebook pairs found in tests/test_files/ — nothing to test")
         sys.exit(0)
 
     all_errors = []
-    for course, assignment in pairs:
-        _, errors = run_pair(args.image, course, assignment)
+    for course, section, assignment in pairs:
+        _, errors = run_pair(args.image, course, section, assignment)
         all_errors.extend(errors)
 
     if all_errors:
